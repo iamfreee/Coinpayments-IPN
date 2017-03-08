@@ -28,13 +28,13 @@ class IPN
             if ($server_data['PHP_AUTH_USER'] !== $this->merchant_id) {
                 throw new InsufficientDataException("Invalid merchant ID provided.");
             }
-    
+
             if ($server_data['PHP_AUTH_PW'] !== $this->ipn_secret) {
                 throw new InsufficientDataException("Invalid IPN secret provided.");
             }
         } elseif ($post_data['ipn_mode'] == 'hmac') {
             $hmac = hash_hmac("sha512", file_get_contents('php://input'), $this->ipn_secret);
-            
+
             if ($hmac !== $server_data['HTTP_HMAC']) {
                 throw new InsufficientDataException("Invalid HMAC provided.");
             }
@@ -50,12 +50,16 @@ class IPN
         $order_status = $post_data['status'];
         $order_status_text = $post_data['status_text'];
 
-        if ($order_status < 0) {
+        if ($order_status >= 100 || $order_status == 2) {
+            // payment is complete or queued for nightly payout, success 
+            return true;
+        } else if ($order_status < 0) {
+            //payment error, this is usually final but payments will sometimes be reopened if there was no exchange rate
+            // conversion or with seller consent 
             throw new FailedPaymentException("{$order_status}: {$order_status_text}");
-        } elseif ($order_status >= 0 && $order_status < 100 && $order_status != 2) {
+        } else {
+            //payment is pending, you can optionally add a note to the order page
             return false;
         }
-
-        return true; // If $order_status is >100 or is 2, return true
     }
 }
